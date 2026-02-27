@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz Divertido - Aprenda Brincando!</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Tela inicial - Seleção de quiz -->
+    <section id="quiz-selector" class="screen active">
+      <div class="header">
+        <div class="logo">
+          <span class="logo-icon">🎮</span>
+          <h1>Quiz Divertido</h1>
+          <p class="subtitle">Escolha um quiz e aprenda brincando!</p>
+        </div>
+      </div>
+      <div class="quiz-list" id="quiz-list">
+        <p class="loading" id="loading">Carregando quizzes...</p>
+      </div>
+      <a href="criar.html" class="teacher-link">✏️ Criar novo quiz (professor)</a>
+    </section>
+
+    <!-- Tela do quiz - Perguntas -->
+    <section id="quiz-screen" class="screen">
+      <div class="quiz-header">
+        <button class="btn-back" id="btn-back" aria-label="Voltar">
+          <span>←</span>
+        </button>
+        <div class="quiz-title-container">
+          <h2 id="quiz-title">Quiz</h2>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <p class="progress-text" id="progress-text">Pergunta 1 de 20</p>
+        </div>
+      </div>
+      <div class="question-container">
+        <div class="question-card">
+          <p class="question-number" id="question-number">Pergunta 1</p>
+          <h3 class="question-text" id="question-text"></h3>
+          <div class="options-container" id="options-container">
+            <!-- Opções geradas dinamicamente -->
+          </div>
+          <button class="btn-next" id="btn-next" disabled>
+            Próxima →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tela de resultado -->
+    <section id="result-screen" class="screen">
+      <div class="result-header">
+        <h2 id="result-title">Parabéns! 🎉</h2>
+        <div class="score-circle" id="score-circle">
+          <span class="score-value" id="score-value">0</span>
+          <span class="score-total">/ 20</span>
+        </div>
+        <p class="score-message" id="score-message"></p>
+      </div>
+      <div class="results-summary" id="results-summary">
+        <!-- Resumo das respostas -->
+      </div>
+      <div class="result-actions">
+        <button class="btn-primary" id="btn-retry">Tentar Novamente</button>
+        <button class="btn-secondary" id="btn-new-quiz">Escolher Outro Quiz</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

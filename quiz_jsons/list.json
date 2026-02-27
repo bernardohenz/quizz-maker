@@ -1,0 +1,16 @@
+{
+  "quizzes": [
+    {
+      "name": "Matemática Pokemon ano 4",
+      "file": "matematica-pokemon-ano4.json",
+      "emoji": "⚡",
+      "description": "20 perguntas de matemática com tema Pokemon - 4º ano"
+    },
+    {
+      "name": "Matemática anime doctor stone ano 5",
+      "file": "anime-doctor-stone.json",
+      "emoji": "📚",
+      "description": "3 perguntas"
+    }
+  ]
+}

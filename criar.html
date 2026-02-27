@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Criar Quiz - Professor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="criar.css">
+</head>
+<body>
+  <div class="app-container criar-container">
+    <!-- Tela 1: Configuração inicial -->
+    <section id="config-screen" class="screen active">
+      <div class="header">
+        <div class="logo">
+          <span class="logo-icon">✏️</span>
+          <h1>Criar Quiz</h1>
+          <p class="subtitle">Configure seu quiz para a turma</p>
+        </div>
+      </div>
+      <form id="config-form" class="config-form">
+        <div class="form-group">
+          <label for="serie">Série escolar</label>
+          <select id="serie" required>
+            <option value="">Selecione...</option>
+            <option value="1">1º ano</option>
+            <option value="2">2º ano</option>
+            <option value="3">3º ano</option>
+            <option value="4">4º ano</option>
+            <option value="5">5º ano</option>
+            <option value="6">6º ano</option>
+            <option value="7">7º ano</option>
+            <option value="8">8º ano</option>
+            <option value="9">9º ano</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="assunto">Assunto</label>
+          <select id="assunto" required>
+            <option value="">Selecione...</option>
+            <option value="Matemática">Matemática</option>
+            <option value="Português">Português</option>
+            <option value="Geografia">Geografia</option>
+            <option value="História">História</option>
+            <option value="Ciências">Ciências</option>
+            <option value="Inglês">Inglês</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="tematica">Temática (ex: Pokemon, futebol, espaço)</label>
+          <input type="text" id="tematica" placeholder="Ex: Pokemon" required>
+        </div>
+        <div class="form-group">
+          <label for="dificuldade">Nível de dificuldade inicial</label>
+          <select id="dificuldade">
+            <option value="fácil">Fácil</option>
+            <option value="médio">Médio</option>
+            <option value="difícil">Difícil</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary btn-full">Começar a criar</button>
+      </form>
+    </section>
+
+    <!-- Tela 2: Geração de perguntas -->
+    <section id="create-screen" class="screen">
+      <div class="create-header">
+        <a href="criar.html" class="btn-back" aria-label="Voltar">←</a>
+        <div class="create-info">
+          <h2 id="quiz-name-display">Quiz</h2>
+          <div class="stats-bar">
+            <span class="stat" id="stat-selected">0 selecionadas</span>
+            <span class="stat difficulty-badge" id="difficulty-badge">Fácil</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="question-preview" id="question-preview">
+        <div class="loading-state" id="loading-question">
+          <div class="spinner"></div>
+          <p>Gerando pergunta...</p>
+        </div>
+        <div class="question-display hidden" id="question-display">
+          <p class="question-label">Pergunta gerada</p>
+          <h3 class="question-text" id="generated-question"></h3>
+          <div class="options-preview" id="options-preview"></div>
+          <p class="correct-answer" id="correct-answer-preview"></p>
+          <p class="explanation-preview" id="explanation-preview"></p>
+          <div class="question-actions">
+            <button class="btn-reject" id="btn-reject">
+              <span>✕</span> Recusar
+            </button>
+            <button class="btn-accept" id="btn-accept">
+              <span>✓</span> Incluir no quiz
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="difficulty-controls">
+        <p class="control-label">Ajustar dificuldade para próxima pergunta:</p>
+        <div class="difficulty-buttons">
+          <button class="btn-diff" id="btn-easier" title="Mais fácil">− Mais fácil</button>
+          <button class="btn-diff" id="btn-same" title="Manter">= Manter</button>
+          <button class="btn-diff" id="btn-harder" title="Mais difícil">+ Mais difícil</button>
+        </div>
+      </div>
+      <div class="note-controls">
+        <label for="question-note">Nota para a próxima pergunta (opcional):</label>
+        <input type="text" id="question-note" placeholder="Ex: pergunta de raciocínio lógico, pergunta pega ratão, mostrar números que não serão usados no cálculo...">
+      </div>
+
+      <div class="create-actions">
+        <button class="btn-secondary" id="btn-finish" disabled>
+          Finalizar quiz (<span id="finish-count">0</span> perguntas)
+        </button>
+      </div>
+    </section>
+
+    <!-- Tela 3: Salvar/Exportar -->
+    <section id="save-screen" class="screen">
+      <div class="header">
+        <div class="logo">
+          <span class="logo-icon">🎉</span>
+          <h1>Quiz criado!</h1>
+          <p class="subtitle" id="save-subtitle">X perguntas selecionadas</p>
+        </div>
+      </div>
+      <div class="save-options">
+        <div class="form-group">
+          <label for="quiz-filename">Nome do arquivo (sem .json)</label>
+          <input type="text" id="quiz-filename" placeholder="meu-quiz">
+        </div>
+        <button class="btn-primary btn-full" id="btn-save-server">
+          Salvar no servidor (aparece na lista automaticamente)
+        </button>
+        <button class="btn-secondary btn-full" id="btn-download">Baixar arquivo JSON</button>
+        <button class="btn-secondary btn-full" id="btn-copy">Copiar JSON para área de transferência</button>
+        <p class="save-hint" id="save-hint">Use "Salvar no servidor" quando estiver rodando o <code>node server.js</code></p>
+      </div>
+      <a href="criar.html" class="btn-link">Criar outro quiz</a>
+    </section>
+  </div>
+
+  <script src="criar.js"></script>
+</body>
+</html>
