@@ -22,24 +22,36 @@ A série na tela vai do 1º ao 9º ano. A dificuldade visível tem cinco rótulo
 - A rota continua `POST /api/generate-question`, com um campo `mode`.
 - O formulário oferece as séries até o pós-médio. No gerador livre, a única mudança de texto é usar o rótulo e o estágio certos (fundamental, médio ou pós-médio).
 - Banco vazio não troca o modo da sessão. A tela oferece gerar só aquela questão do zero.
-- A origem e a curadoria das questões ficam fora deste spec.
+- Toda questão do banco foi escrita por uma pessoa. A entrada é manual: questão pública da internet, ou questão que você transcreve. Questão redigida pelo modelo fica de fora do banco.
+
+## Origem
+
+Cada item traz a procedência:
+
+| Campo | Papel |
+| --- | --- |
+| `origin` | `public` ou `manual` |
+| `source_label` | Texto curto da fonte: endereço da questão pública ou uma descrição da que você inseriu |
+
+A busca ignora item sem um desses valores. Gerar do zero, adaptar e salvar o quiz não escrevem em `question_bank`. A questão aceita no quiz permanece só no JSON do quiz.
+
+A página para incluir questões fica para um spec seguinte. Ela poderá receber o texto digitado ou uma foto. Com a foto, um modelo visual extrai enunciado, alternativas e resposta da imagem, e pode propor habilidade, faixa de série, dificuldade, política de tema, limites e tipos de erro. O enunciado, as alternativas e a resposta gravados são os da questão fotografada ou digitada. O item entra como `draft` e só vira `usable` depois da sua confirmação. Essa página também não inventa questão para encher o banco.
 
 ## Fora de escopo
 
-- Como as questões entram no banco, revisão humana e fila de aprovação.
-- Gravar de volta no banco uma questão aceita pelo professor.
+- Construir agora a página de inclusão, com digitação ou foto.
 - Como os embeddings dos itens são calculados e gravados. Este spec só embute a nota do professor na hora da busca.
 - Códigos da BNCC, índice ANN e um banco vetorial separado.
 - Mudar o fluxo de jogar, aceitar, recusar ou salvar.
 
 ## O item
 
-Cada questão utilizável tem:
+Cada questão do banco tem:
 
 | Campo | Papel |
 | --- | --- |
 | `id` | Identificador estável |
-| `subject` | Igual aos valores atuais do assunto: Matemática, Português, Geografia, História, Ciências, Inglês |
+| `subject` | Matemática, Português, Geografia, História, Ciências, Inglês, Física, Química, Biologia |
 | `grade_min`, `grade_max` | Índices inclusivos. A série pedida precisa cair dentro da faixa |
 | `difficulty` | Inteiro de 1 a 10, dentro da faixa de série |
 | `skill` | Uma frase. É a chave da família e o texto principal do embedding |
@@ -52,7 +64,9 @@ Cada questão utilizável tem:
 | `invariant.preserve` | Lista de frases que a reescrita tem de obedecer, inclusive limites numéricos |
 | `distractors` | Lista de `{ "index", "error" }` com o tipo de erro de cada alternativa errada |
 | `embedding` | Vetor opcional de 1536 dimensões, de `skill` + `stem`. Nulo é válido |
-| `status` | A busca só lê `usable` |
+| `origin` | `public` ou `manual` |
+| `source_label` | Procedência, texto não vazio |
+| `status` | `draft` ou `usable`. A busca só lê `usable` |
 
 Índice de série:
 
@@ -77,7 +91,7 @@ Dificuldade pedida, a partir dos rótulos que a tela já usa:
 `retrieveFamily(query, rng)` recebe `subject`, `gradeIndex`, `difficultyTarget`, `note`, `excludeIds`, `usedSkills` e um gerador aleatório injetável.
 
 1. A janela começa em ±1 em torno do alvo.
-2. Os candidatos têm o assunto pedido, `grade_min <= série <= grade_max`, dificuldade dentro da janela, `status = usable` e `id` fora de `excludeIds`.
+2. Os candidatos têm o assunto pedido, `grade_min <= série <= grade_max`, dificuldade dentro da janela, `status = usable`, `origin` em `public` ou `manual`, `source_label` não vazio e `id` fora de `excludeIds`.
 3. Com menos de 3 candidatos e janela menor que ±3, a janela abre um ponto por vez: primeiro ±2, depois ±3.
 4. Zero candidatos produz o resultado vazio.
 5. Com nota não vazia e embeddings configurados, os candidatos que têm vetor sobem pela similaridade de cosseno entre o embedding da nota e o embedding da questão. Candidato sem vetor fica no fim.
@@ -168,7 +182,7 @@ Na configuração, um par de opções:
 
 O seletor de série passa a listar os índices 1 a 13, com os rótulos da tabela. O título da sessão usa o texto da opção escolhida.
 
-O restante do formulário, os botões de dificuldade, a nota, aceitar, recusar e finalizar ficam como estão. O texto de espera no modo banco é "Adaptando pergunta do banco...".
+O seletor de assunto usa a mesma lista do item, inclusive Física, Química e Biologia. Os botões de dificuldade, a nota, aceitar, recusar e finalizar ficam como estão. O texto de espera no modo banco é "Adaptando pergunta do banco...".
 
 O cliente guarda os `sourceIds` já mostrados e as `skill` aceitas e os reenvia. Aceitar uma questão livre, vinda do botão de reserva, não acrescenta habilidade.
 
@@ -180,7 +194,7 @@ A leitura tem uma interface só.
 
 Com `SUPABASE_URL` e `SUPABASE_KEY`, a tabela `question_bank` no Postgres já usado pelo projeto, com a extensão pgvector. Colunas iguais aos campos do item. `invariant` e `distractors` são `jsonb`. `embedding` é `vector(1536)`, nulo permitido. A ordenação por cosseno é exata dentro do conjunto filtrado.
 
-Sem Supabase, a fonte é `question_bank/items.json`, um array de itens. Ausência do arquivo é `bank_unavailable`. Array vazio, ou só itens fora de `usable`, é `bank_empty`.
+Sem Supabase, a fonte é `question_bank/items.json`, um array de itens. Ausência do arquivo é `bank_unavailable`. Array vazio, ou nenhum item aceito pela busca, é `bank_empty`.
 
 Embeddings da nota usam um endpoint compatível com a API de embeddings da OpenAI:
 
@@ -206,6 +220,7 @@ A tabela não é exposta ao navegador. O servidor usa a mesma chave Supabase de 
 A busca é testada com itens fixos e um `rng` determinístico:
 
 - a série pedida cai dentro de `grade_min` e `grade_max`;
+- item `draft`, sem `origin` válida ou sem `source_label`, fica de fora;
 - a janela abre de ±1 até ±3, um ponto por vez, para ao chegar a 3 candidatos e não passa de ±3;
 - `excludeIds` não volta;
 - a família tem uma só `skill` e uma só `theme_policy`, com tamanho de 1 a 3;
@@ -219,7 +234,8 @@ A rota, com Groq e embeddings substituídos:
 
 - `mode` livre devolve o JSON antigo, sem `sourceIds`;
 - `mode` banco devolve `sourceIds`, `skill` e `mode`;
-- banco sem candidatos devolve 422 e `bank_empty`.
+- banco sem candidatos devolve 422 e `bank_empty`;
+- gerar, adaptar e salvar o quiz não escrevem em `question_bank`.
 
 ## Critérios de aceite
 
@@ -229,3 +245,4 @@ A rota, com Groq e embeddings substituídos:
 - Aceitar várias questões espalha as habilidades: as já aceitas pesam menos na próxima âncora.
 - Sem candidatos, a tela oferece gerar só aquela do zero e a sessão continua no modo banco.
 - Um quiz salvo com os campos extras abre e joga em `index.html`.
+- Nenhuma rota deste trabalho insere questão no banco. Questão gerada ou adaptada permanece só no quiz.
