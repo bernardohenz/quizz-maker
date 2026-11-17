@@ -10,10 +10,12 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('node:crypto');
 const { buildFreePrompt, TEXT_MODEL } = require('./lib/free-question');
 const { parseQuizQuestion } = require('./lib/parse-question');
 const { difficultyTarget } = require('./lib/grades');
-const { getBankStore } = require('./lib/bank-store');
+const { draftErrors, usableErrors } = require('./lib/item-rules');
+const { getBankStore, normalizeStoredItem } = require('./lib/bank-store');
 const { retrieveFamily } = require('./lib/question-bank');
 const { adaptQuestion } = require('./lib/adapt-question');
 const { embeddingsConfigured, embedText } = require('./lib/embeddings');
@@ -32,6 +34,8 @@ if (fs.existsSync(envPath)) {
     }
   });
 }
+
+const { parseImageDataUrl, extractQuestion, VISION_MODEL } = require('./lib/extract-question');
 
 let supabase = null;
 try {
@@ -56,6 +60,31 @@ function httpError(status, message, code) {
   error.status = status;
   if (code) error.code = code;
   return error;
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('error', reject);
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch {
+        reject(httpError(400, 'JSON inválido', 'invalid_request'));
+      }
+    });
+  });
+}
+
+function bankItemErrors(item) {
+  if (!item || (item.status !== 'draft' && item.status !== 'usable')) return ['status'];
+  if (item.status === 'draft') return draftErrors(item);
+  return usableErrors(item);
+}
+
+function requestUrl(req) {
+  return new URL(req.url, 'http://127.0.0.1');
 }
 
 const MIME_TYPES = {
@@ -116,6 +145,40 @@ async function completeWithGroq(prompt, temperature) {
     throw new Error('Resposta vazia da API');
   }
 
+  return content;
+}
+
+async function completeExtract(prompt, imageDataUrl) {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: VISION_MODEL,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Groq API error ${response.status}: ${errText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new Error('Resposta vazia da API');
   return content;
 }
 
@@ -190,7 +253,7 @@ function createQuizServer() {
   return http.createServer(async (req, res) => {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
@@ -304,6 +367,125 @@ function createQuizServer() {
         }
       });
       return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/extract-question') {
+      if (!process.env.GROQ_API_KEY) {
+        sendJson(res, 500, { error: 'GROQ_API_KEY não configurada. Execute: GROQ_API_KEY=sua_chave node server.js' });
+        return;
+      }
+      try {
+        const body = await readJsonBody(req);
+        let imageDataUrl;
+        try {
+          imageDataUrl = parseImageDataUrl(body && body.imageDataUrl);
+        } catch (error) {
+          if (error && error.code === 'invalid_image') {
+            sendJson(res, 400, { error: error.message, code: 'invalid_image' });
+            return;
+          }
+          throw error;
+        }
+        const extraction = await extractQuestion(imageDataUrl, completeExtract);
+        sendJson(res, 200, extraction);
+      } catch (error) {
+        if (error && error.code === 'invalid_request') {
+          sendJson(res, 400, { error: 'JSON inválido', code: 'invalid_request' });
+          return;
+        }
+        if (error && error.code === 'invalid_image') {
+          sendJson(res, 400, { error: error.message, code: 'invalid_image' });
+          return;
+        }
+        sendJson(res, 422, { error: error.message, code: 'extract_failed' });
+      }
+      return;
+    }
+
+    if (req.url.startsWith('/api/question-bank')) {
+      const url = requestUrl(req);
+      const bankItemMatch = url.pathname.match(/^\/api\/question-bank\/([^/]+)$/);
+
+      if (req.method === 'GET' && url.pathname === '/api/question-bank') {
+        const status = url.searchParams.get('status');
+        if (status !== 'draft' && status !== 'usable') {
+          sendJson(res, 400, { error: 'Informe status=draft ou status=usable', code: 'invalid_request' });
+          return;
+        }
+        try {
+          const items = await getBankStore().listAll();
+          const visible = items
+            .filter((item) => item && item.status === status)
+            .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+            .map((item) => {
+              const copy = { ...item };
+              delete copy.embedding;
+              return copy;
+            });
+          sendJson(res, 200, visible);
+        } catch (error) {
+          if (error && error.code === 'bank_unavailable') {
+            sendJson(res, 503, { error: error.message, code: 'bank_unavailable' });
+            return;
+          }
+          sendJson(res, 500, { error: error.message });
+        }
+        return;
+      }
+
+      if ((req.method === 'POST' && url.pathname === '/api/question-bank') || (req.method === 'PUT' && bankItemMatch)) {
+        try {
+          const body = await readJsonBody(req);
+          const errors = bankItemErrors(body);
+          if (errors.length > 0) {
+            sendJson(res, 400, { error: 'Item inválido', code: 'invalid_item', fields: errors });
+            return;
+          }
+          const store = getBankStore();
+          let id = crypto.randomUUID();
+          let createdAt = new Date().toISOString();
+          if (req.method === 'PUT') {
+            id = decodeURIComponent(bankItemMatch[1]);
+            const existing = (await store.listAll()).find((entry) => entry && entry.id === id);
+            if (!existing) {
+              sendJson(res, 404, { error: 'Questão não encontrada', code: 'not_found' });
+              return;
+            }
+            createdAt = existing.created_at;
+          }
+          const saved = await store.upsert(normalizeStoredItem(body, { id, created_at: createdAt }));
+          sendJson(res, 200, saved);
+        } catch (error) {
+          if (error && error.code === 'invalid_request') {
+            sendJson(res, 400, { error: 'JSON inválido', code: 'invalid_request' });
+            return;
+          }
+          if (error && error.code === 'bank_unavailable') {
+            sendJson(res, 503, { error: error.message, code: 'bank_unavailable' });
+            return;
+          }
+          sendJson(res, 500, { error: error.message });
+        }
+        return;
+      }
+
+      if (req.method === 'DELETE' && bankItemMatch) {
+        try {
+          const result = await getBankStore().remove(decodeURIComponent(bankItemMatch[1]));
+          if (!result.removed) {
+            sendJson(res, 404, { error: 'Questão não encontrada', code: 'not_found' });
+            return;
+          }
+          sendJson(res, 200, { removed: true });
+        } catch (error) {
+          if (error && error.code === 'bank_unavailable') {
+            sendJson(res, 503, { error: error.message, code: 'bank_unavailable' });
+            return;
+          }
+          sendJson(res, 500, { error: error.message });
+        }
+        return;
+      }
     }
 
     serveStatic(req, res);
