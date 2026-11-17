@@ -11,6 +11,8 @@ let selectedQuestions = [];
 let currentQuestion = null;
 let currentDifficulty = 'médio';
 let nextDifficultyHint = 'same'; // 'easier', 'same', 'harder'
+let generationMode = 'free';
+let session = CreateSession.createSession();
 
 // Elementos
 const configForm = document.getElementById('config-form');
@@ -22,6 +24,9 @@ const statSelected = document.getElementById('stat-selected');
 const difficultyBadge = document.getElementById('difficulty-badge');
 const loadingQuestion = document.getElementById('loading-question');
 const questionDisplay = document.getElementById('question-display');
+const bankEmpty = document.getElementById('bank-empty');
+const bankEmptyMessage = document.getElementById('bank-empty-message');
+const btnBankFallback = document.getElementById('btn-bank-fallback');
 const generatedQuestion = document.getElementById('generated-question');
 const optionsPreview = document.getElementById('options-preview');
 const correctAnswerPreview = document.getElementById('correct-answer-preview');
@@ -53,9 +58,14 @@ function getDifficultyForNextQuestion() {
   return currentDifficulty;
 }
 
-async function generateQuestion() {
+async function generateQuestion(forceFree) {
+  const useBank = generationMode === 'bank' && !forceFree;
   loadingQuestion.classList.remove('hidden');
   questionDisplay.classList.add('hidden');
+  bankEmpty.classList.add('hidden');
+  loadingQuestion.querySelector('p').textContent = useBank
+    ? 'Adaptando pergunta do banco...'
+    : 'Gerando pergunta...';
 
   const difficulty = getDifficultyForNextQuestion();
   currentDifficulty = difficulty;
@@ -64,26 +74,46 @@ async function generateQuestion() {
   const quizNote = questionNoteInput.value;
   questionNoteInput.value = ''; // Limpa após usar
 
+  const requestConfig = {
+    serie: quizConfig.serie,
+    assunto: quizConfig.assunto,
+    tematica: quizConfig.tematica,
+    dificuldade: difficulty,
+  };
+  const payload = useBank
+    ? CreateSession.bankRequestBody(requestConfig, session, quizNote)
+    : {
+        ...requestConfig,
+        nota: quizNote.trim() || undefined,
+        ...(forceFree ? { mode: 'free' } : {}),
+      };
+
   try {
     const response = await fetch(`${API_BASE}/api/generate-question`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        serie: quizConfig.serie,
-        assunto: quizConfig.assunto,
-        tematica: quizConfig.tematica,
-        dificuldade: difficulty,
-        nota: quizNote.trim() || undefined,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
+      if (
+        (response.status === 422 && data.code === 'bank_empty') ||
+        (response.status === 503 && data.code === 'bank_unavailable')
+      ) {
+        loadingQuestion.classList.add('hidden');
+        questionDisplay.classList.add('hidden');
+        bankEmptyMessage.textContent = data.error || '';
+        bankEmpty.classList.remove('hidden');
+        return;
+      }
       throw new Error(data.error || 'Erro ao gerar pergunta');
     }
 
     currentQuestion = data;
+    session = CreateSession.noteShown(session, data);
+    bankEmpty.classList.add('hidden');
     showQuestion(data);
   } catch (err) {
     alert('Erro: ' + err.message + '\n\nVerifique se o servidor está rodando com: GROQ_API_KEY=sua_chave node server.js');
@@ -135,6 +165,7 @@ function updateDifficultyBadge() {
 
 function addQuestion() {
   if (!currentQuestion) return;
+  session = CreateSession.noteAccepted(session, currentQuestion);
   selectedQuestions.push({ ...currentQuestion });
   updateUI();
   generateQuestion();
@@ -194,17 +225,21 @@ function showScreen(id) {
 // Event listeners
 configForm.addEventListener('submit', (e) => {
   e.preventDefault();
+  const serie = document.getElementById('serie');
+  const selectedMode = document.querySelector('input[name="modo"]:checked');
+  generationMode = selectedMode ? selectedMode.value : 'free';
   quizConfig = {
-    serie: document.getElementById('serie').value,
+    serie: serie.value,
     assunto: document.getElementById('assunto').value,
     tematica: document.getElementById('tematica').value.trim(),
     dificuldade: document.getElementById('dificuldade').value,
   };
   currentDifficulty = quizConfig.dificuldade;
   nextDifficultyHint = 'same';
+  session = CreateSession.createSession();
 
   selectedQuestions = [];
-  quizNameDisplay.textContent = `${quizConfig.assunto} - ${quizConfig.tematica} (${quizConfig.serie}º ano)`;
+  quizNameDisplay.textContent = `${quizConfig.assunto} - ${quizConfig.tematica} (${serie.selectedOptions[0].text})`;
   updateUI();
 
   showScreen('create-screen');
@@ -213,6 +248,7 @@ configForm.addEventListener('submit', (e) => {
 
 btnAccept.addEventListener('click', addQuestion);
 btnReject.addEventListener('click', rejectQuestion);
+btnBankFallback.addEventListener('click', () => generateQuestion(true));
 
 btnEasier.addEventListener('click', () => {
   nextDifficultyHint = 'easier';
