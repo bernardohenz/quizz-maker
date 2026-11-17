@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { retrieveFamily } = require('../lib/question-bank');
+const { retrieveFamily, cosine } = require('../lib/question-bank');
 
 function item(overrides = {}) {
   return {
@@ -15,6 +15,7 @@ function item(overrides = {}) {
     status: 'usable',
     skill: 'multiplicar',
     stem: 'enunciado',
+    embedding: null,
     ...overrides,
   };
 }
@@ -110,4 +111,63 @@ test('theme_policy diferente não entra como irmão', () => {
   assert.equal(result.family[0].id, 'anchor');
   assert.ok(result.sourceIds.includes('sibling'));
   assert.ok(!result.sourceIds.includes('wording'));
+});
+
+test('cosseno idêntico é 1 e vetores diferentes ficam abaixo', () => {
+  assert.equal(cosine([1, 0], [1, 0]), 1);
+  assert.ok(cosine([1, 0], [0, 1]) < 1);
+});
+
+test('nota com embedding coloca a habilidade mais próxima na frente', () => {
+  const close = item({ id: 'close', skill: 'multiplicar', embedding: [1, 0] });
+  const far = item({ id: 'far', skill: 'somar', embedding: [0, 1] });
+  const result = retrieveFamily([far, close], {
+    subject: 'Matemática',
+    gradeIndex: 4,
+    difficultyTarget: 6,
+    note: 'quero conta de vezes',
+    embeddingsConfigured: true,
+    noteEmbedding: [1, 0],
+  }, () => 0);
+  assert.equal(result.family[0].id, 'close');
+});
+
+test('sem configuração de embedding a nota não muda a ordem da dificuldade', () => {
+  const harder = item({ id: 'hard', difficulty: 8, embedding: [1, 0] });
+  const target = item({ id: 'target', difficulty: 6, embedding: [0, 1] });
+  const result = retrieveFamily([harder, target], {
+    subject: 'Matemática',
+    gradeIndex: 4,
+    difficultyTarget: 6,
+    note: 'quero conta de vezes',
+    embeddingsConfigured: false,
+    noteEmbedding: [1, 0],
+  }, () => 0);
+  assert.equal(result.family[0].id, 'target');
+});
+
+test('habilidade já aceita pesa 0,25', () => {
+  function mulberry32(seed) {
+    let value = seed;
+    return () => {
+      value |= 0;
+      value = (value + 0x6D2B79F5) | 0;
+      let next = Math.imul(value ^ (value >>> 15), 1 | value);
+      next = (next + Math.imul(next ^ (next >>> 7), 61 | next)) ^ next;
+      return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const used = item({ id: 'used', skill: 'somar' });
+  const fresh = item({ id: 'fresh', skill: 'multiplicar' });
+  let usedWins = 0;
+  for (let seed = 1; seed <= 400; seed += 1) {
+    const result = retrieveFamily([used, fresh], {
+      subject: 'Matemática',
+      gradeIndex: 4,
+      difficultyTarget: 6,
+      usedSkills: ['somar'],
+    }, mulberry32(seed));
+    if (result.family[0].id === 'used') usedWins += 1;
+  }
+  assert.ok(usedWins < 140);
 });
