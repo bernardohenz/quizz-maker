@@ -316,7 +316,10 @@ async function removeItem(id) {
     formError().textContent = body.error || 'Não foi possível excluir.';
     return;
   }
-  if (editingId === id) editingId = null;
+  if (editingId === id) {
+    editingId = null;
+    clearForm();
+  }
   formError().textContent = '';
   await loadList();
 }
