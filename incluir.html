@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Incluir questão no banco</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="criar.css">
+  <style>
+    .criar-container .form-group textarea {
+      width: 100%;
+      padding: 14px 18px;
+      border: 3px solid #E9ECEF;
+      border-radius: var(--radius-sm);
+      font-size: 1rem;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .criar-container .form-group textarea:focus {
+      outline: none;
+      border-color: var(--secondary);
+    }
+
+    .criar-container .form-group input[type="radio"] {
+      width: auto;
+      padding: 0;
+      border: none;
+    }
+
+    .criar-container .choice {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .criar-container button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #form-error {
+      color: var(--error);
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    #item-list {
+      margin-top: 16px;
+    }
+
+    #item-list .option-preview-item {
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container criar-container">
+    <div class="header">
+      <div class="logo">
+        <span class="logo-icon">📝</span>
+        <h1>Incluir questão no banco</h1>
+        <p class="subtitle">Confirme a questão antes de guardar</p>
+      </div>
+    </div>
+
+    <a href="criar.html" class="btn-link">← Voltar para criar quiz</a>
+
+    <form id="item-form" class="config-form" autocomplete="off">
+      <div class="form-group">
+        <label>Procedência</label>
+        <label class="choice"><input type="radio" name="origin" value="public"> Pública</label>
+        <label class="choice"><input type="radio" name="origin" value="manual"> Manual</label>
+      </div>
+
+      <div class="form-group">
+        <label for="source_label">Fonte</label>
+        <input type="text" id="source_label" placeholder="Ex: caderno">
+      </div>
+
+      <div class="form-group">
+        <label for="stem">Enunciado</label>
+        <textarea id="stem" rows="4"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Alternativas</label>
+        <div id="options"></div>
+        <button type="button" id="add-option" class="btn btn-secondary">Adicionar alternativa</button>
+      </div>
+
+      <div class="form-group">
+        <label for="subject">Assunto</label>
+        <select id="subject">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="grade_min">Série mínima</label>
+        <select id="grade_min">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="grade_max">Série máxima</label>
+        <select id="grade_max">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="difficulty">Dificuldade</label>
+        <select id="difficulty">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="skill">Habilidade</label>
+        <input type="text" id="skill">
+      </div>
+
+      <div class="form-group">
+        <label for="skill_tags">Etiquetas</label>
+        <input type="text" id="skill_tags" placeholder="Separadas por vírgula">
+      </div>
+
+      <div class="form-group">
+        <label>Política de tema</label>
+        <label class="choice"><input type="radio" name="theme_policy" value="reskin"> Pode trocar o cenário</label>
+        <label class="choice"><input type="radio" name="theme_policy" value="wording"> Manter o fato</label>
+      </div>
+
+      <div class="form-group">
+        <label for="explanation">Explicação</label>
+        <textarea id="explanation" rows="3"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="preserve">Limites (uma frase por linha)</label>
+        <textarea id="preserve" rows="3"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="photo">Foto da questão</label>
+        <input type="file" id="photo" accept="image/jpeg,image/png,image/webp">
+        <button type="button" id="read-photo" class="btn btn-secondary">Ler foto</button>
+      </div>
+
+      <p id="form-error" role="alert"></p>
+      <button type="button" id="save-draft" class="btn btn-secondary btn-full">Guardar rascunho</button>
+      <button type="button" id="save-usable" class="btn btn-primary btn-full">Incluir no banco</button>
+    </form>
+
+    <div class="question-actions">
+      <button type="button" id="show-drafts" class="btn btn-secondary">Rascunhos</button>
+      <button type="button" id="show-usable" class="btn btn-secondary">No banco</button>
+    </div>
+    <div id="item-list" class="save-options"></div>
+  </div>
+
+  <script src="lib/grades.js"></script>
+  <script type="module" src="lib/item-rules.js"></script>
+  <script src="incluir.js"></script>
+</body>
+</html>
