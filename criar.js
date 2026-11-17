@@ -114,7 +114,7 @@ async function generateQuestion(forceFree) {
     session = CreateSession.noteShown(session, data);
     bankEmpty.classList.add('hidden');
     showQuestion(data);
-    questionNoteInput.value = '';
+    if (generationMode !== 'bank') questionNoteInput.value = '';
   } catch (err) {
     alert('Erro: ' + err.message + '\n\nVerifique se o servidor está rodando com: GROQ_API_KEY=sua_chave node server.js');
     loadingQuestion.classList.add('hidden');

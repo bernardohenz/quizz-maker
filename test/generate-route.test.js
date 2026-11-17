@@ -11,6 +11,7 @@ process.env.SUPABASE_URL = '';
 process.env.SUPABASE_KEY = '';
 process.env.EMBEDDING_API_URL = '';
 process.env.EMBEDDING_API_KEY = '';
+process.env.EMBEDDING_LOCAL = '0';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

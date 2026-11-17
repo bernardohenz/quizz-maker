@@ -1,0 +1,41 @@
+{
+  "name": "Matemática anime doctor stone ano 5",
+  "questions": [
+    {
+      "question": "Senku e seus amigos precisam medir a distância até o local onde está o 'Rei das Bestas' para planejar sua próxima aventura em 'Dr. Stone'. Eles medem que a distância é de 250 metros. Se eles decidem caminhar 1/5 dessa distância por dia, quantos dias levarão para chegar ao local?",
+      "options": [
+        "2 dias",
+        "5 dias",
+        "10 dias",
+        "12,5 dias",
+        "25 dias"
+      ],
+      "correctIndex": 1,
+      "explanation": "Para encontrar o número de dias, basta dividir a distância total pela fração da distância que eles caminham por dia. Como eles caminham 1/5 da distância por dia, dividimos 250 metros por 50 metros (1/5 de 250) e obtemos 5 dias."
+    },
+    {
+      "question": "Senku e seus amigos em 'Dr. Stone' precisam distribuir 18 pedras preciosas igualmente entre 6 caixas para guardar. Quantas pedras cada caixa irá conter?",
+      "options": [
+        "2 pedras",
+        "3 pedras",
+        "4 pedras",
+        "5 pedras",
+        "6 pedras"
+      ],
+      "correctIndex": 1,
+      "explanation": "Para saber quantas pedras cada caixa irá conter, dividimos o número total de pedras (18) pelo número de caixas (6). 18 ÷ 6 = 3, então cada caixa terá 3 pedras."
+    },
+    {
+      "question": "Senku e seus amigos precisam calcular a quantidade de comida necessária para uma viagem de 15 dias. Se cada pessoa consome 2 kg de comida por dia, e há 8 pessoas na expedição, quantos kg de comida eles precisarão no total?",
+      "options": [
+        "120 kg",
+        "160 kg",
+        "240 kg",
+        "300 kg",
+        "360 kg"
+      ],
+      "correctIndex": 2,
+      "explanation": "Para calcular a quantidade total de comida, precisamos multiplicar a quantidade de comida por pessoa por dia (2 kg) pelo número de pessoas (8) e pelo número de dias (15). Isso é feito pela fórmula: 2 kg/pessoa/dia * 8 pessoas * 15 dias = 240 kg."
+    }
+  ]
+}

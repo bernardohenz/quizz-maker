@@ -1,0 +1,125 @@
+{
+  "name": "Matemática Pokemon ano 4",
+  "questions": [
+    {
+      "question": "O Pikachu tem 3 Poké Bolas. A Ash tem 5 vezes mais Poké Bolas que o Pikachu. Quantas Poké Bolas a Ash tem?",
+      "options": ["8", "12", "15", "18", "20"],
+      "correctIndex": 2,
+      "explanation": "5 × 3 = 15. Multiplicar é somar o mesmo número várias vezes: 3 + 3 + 3 + 3 + 3 = 15."
+    },
+    {
+      "question": "O Charmander coletou 24 doces. Ele quer dividir igualmente entre 4 amigos. Quantos doces cada amigo recebe?",
+      "options": ["4", "5", "6", "7", "8"],
+      "correctIndex": 2,
+      "explanation": "24 ÷ 4 = 6. Dividir é repartir em partes iguais. 24 doces para 4 amigos = 6 doces cada."
+    },
+    {
+      "question": "Qual é o resultado de 7 × 4?",
+      "options": ["24", "26", "28", "30", "32"],
+      "correctIndex": 2,
+      "explanation": "7 × 4 = 28. A tabuada do 7: 7, 14, 21, 28, 35..."
+    },
+    {
+      "question": "O Bulbasaur plantou 36 sementes em 6 fileiras iguais. Quantas sementes em cada fileira?",
+      "options": ["4", "5", "6", "7", "8"],
+      "correctIndex": 2,
+      "explanation": "36 ÷ 6 = 6. Se temos 36 itens e dividimos em 6 grupos, cada grupo tem 6 itens."
+    },
+    {
+      "question": "O Squirtle nadou 8 km na segunda-feira e 9 km na terça. Quantos km ele nadou no total?",
+      "options": ["15", "16", "17", "18", "19"],
+      "correctIndex": 2,
+      "explanation": "8 + 9 = 17. Somando os dois dias: 8 km + 9 km = 17 km."
+    },
+    {
+      "question": "Qual é o resultado de 9 × 6?",
+      "options": ["48", "52", "54", "56", "58"],
+      "correctIndex": 2,
+      "explanation": "9 × 6 = 54. Dica: 9 × 6 = 9 × 5 + 9 = 45 + 9 = 54."
+    },
+    {
+      "question": "A Misty tem 45 moedas. Ela quer colocar 9 moedas em cada bolso. Quantos bolsos ela precisa?",
+      "options": ["4", "5", "6", "7", "8"],
+      "correctIndex": 1,
+      "explanation": "45 ÷ 9 = 5. Se cada bolso tem 9 moedas, precisamos de 5 bolsos para 45 moedas."
+    },
+    {
+      "question": "O Eevee comeu 4 biscoitos por dia durante 6 dias. Quantos biscoitos ele comeu no total?",
+      "options": ["20", "22", "24", "26", "28"],
+      "correctIndex": 2,
+      "explanation": "4 × 6 = 24. Multiplicação: 4 biscoitos × 6 dias = 24 biscoitos."
+    },
+    {
+      "question": "Qual número completa a sequência: 3, 6, 9, 12, __?",
+      "options": ["14", "15", "16", "17", "18"],
+      "correctIndex": 1,
+      "explanation": "A sequência soma 3 cada vez. 12 + 3 = 15. É a tabuada do 3!"
+    },
+    {
+      "question": "O Pikachu tinha 50 pontos de energia. Usou 23 em um ataque. Quantos pontos sobraram?",
+      "options": ["25", "26", "27", "28", "29"],
+      "correctIndex": 2,
+      "explanation": "50 - 23 = 27. Subtração: pegamos 23 de 50, sobram 27."
+    },
+    {
+      "question": "Qual é o resultado de 8 × 7?",
+      "options": ["54", "55", "56", "57", "58"],
+      "correctIndex": 2,
+      "explanation": "8 × 7 = 56. Uma das tabuadas mais difíceis! 8 × 7 = 56."
+    },
+    {
+      "question": "O Meowth dividiu 42 moedas entre 6 gatos. Quantas moedas cada gato recebeu?",
+      "options": ["5", "6", "7", "8", "9"],
+      "correctIndex": 2,
+      "explanation": "42 ÷ 6 = 7. Dividir 42 em 6 partes iguais = 7 em cada parte."
+    },
+    {
+      "question": "Se 5 × 8 = 40, quanto é 6 × 8?",
+      "options": ["46", "47", "48", "49", "50"],
+      "correctIndex": 2,
+      "explanation": "6 × 8 = 48. Se 5 × 8 = 40, então 6 × 8 = 40 + 8 = 48."
+    },
+    {
+      "question": "O Jigglypuff cantou por 3 horas. Quantos minutos ele cantou? (1 hora = 60 minutos)",
+      "options": ["120", "150", "180", "200", "210"],
+      "correctIndex": 2,
+      "explanation": "3 × 60 = 180 minutos. Cada hora tem 60 minutos, então 3 horas = 180 minutos."
+    },
+    {
+      "question": "Qual número falta? 72 ÷ __ = 8",
+      "options": ["7", "8", "9", "10", "11"],
+      "correctIndex": 2,
+      "explanation": "72 ÷ 9 = 8. Qual número vezes 8 dá 72? 9 × 8 = 72!"
+    },
+    {
+      "question": "O Snorlax dormiu 4 horas de manhã e 5 horas à tarde. Quantas horas dormiu no total?",
+      "options": ["8", "9", "10", "11", "12"],
+      "correctIndex": 1,
+      "explanation": "4 + 5 = 9 horas. Somando o tempo da manhã e da tarde."
+    },
+    {
+      "question": "Qual é o resultado de 6 × 9?",
+      "options": ["52", "54", "56", "58", "60"],
+      "correctIndex": 1,
+      "explanation": "6 × 9 = 54. A tabuada do 9: 9, 18, 27, 36, 45, 54..."
+    },
+    {
+      "question": "O Psyduck tem 63 pedras preciosas. Ele quer dar 9 para cada amigo. Quantos amigos podem receber?",
+      "options": ["5", "6", "7", "8", "9"],
+      "correctIndex": 2,
+      "explanation": "63 ÷ 9 = 7. Dividindo 63 em grupos de 9, temos 7 grupos (7 amigos)."
+    },
+    {
+      "question": "Se um treinador captura 3 Pokemon por dia, quantos Pokemon ele captura em 2 semanas? (1 semana = 7 dias)",
+      "options": ["38", "40", "42", "44", "46"],
+      "correctIndex": 2,
+      "explanation": "2 semanas = 14 dias. 3 × 14 = 42. Multiplicamos Pokemon por dia pelos dias."
+    },
+    {
+      "question": "O Mewtwo pensou em um número. Multiplicou por 5 e obteve 35. Qual era o número?",
+      "options": ["5", "6", "7", "8", "9"],
+      "correctIndex": 2,
+      "explanation": "35 ÷ 5 = 7. Se 7 × 5 = 35, o número que o Mewtwo pensou era 7!"
+    }
+  ]
+}

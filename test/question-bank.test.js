@@ -132,6 +132,20 @@ test('nota com embedding coloca a habilidade mais próxima na frente', () => {
   assert.equal(result.family[0].id, 'close');
 });
 
+test('nota escolhe a questão mais próxima mesmo com sorteio alto', () => {
+  const close = item({ id: 'close', skill: 'used to', embedding: [1, 0] });
+  const far = item({ id: 'far', skill: 'preposição', embedding: [0, 1] });
+  const result = retrieveFamily([far, close], {
+    subject: 'Matemática',
+    gradeIndex: 4,
+    difficultyTarget: 6,
+    note: 'used to',
+    embeddingsConfigured: true,
+    noteEmbedding: [1, 0],
+  }, () => 0.99);
+  assert.equal(result.family[0].id, 'close');
+});
+
 test('sem configuração de embedding a nota não muda a ordem da dificuldade', () => {
   const harder = item({ id: 'hard', difficulty: 8, embedding: [1, 0] });
   const target = item({ id: 'target', difficulty: 6, embedding: [0, 1] });

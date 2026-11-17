@@ -19,6 +19,7 @@ const { getBankStore, normalizeStoredItem } = require('./lib/bank-store');
 const { retrieveFamily } = require('./lib/question-bank');
 const { adaptQuestion } = require('./lib/adapt-question');
 const { embeddingsConfigured, embedText } = require('./lib/embeddings');
+const { retrievalText } = require('./lib/retrieval-text');
 
 // Carregar .env primeiro
 const envPath = path.join(__dirname, '.env');
@@ -454,8 +455,12 @@ function createQuizServer() {
             }
             createdAt = existing.created_at;
           }
-          const saved = await store.upsert(normalizeStoredItem(body, { id, created_at: createdAt }));
-          sendJson(res, 200, saved);
+          const stored = normalizeStoredItem(body, { id, created_at: createdAt });
+          if (stored.status === 'usable' && embeddingsConfigured()) {
+            stored.embedding = await embedText(retrievalText(stored));
+          }
+          const saved = await store.upsert(stored);
+          sendJson(res, 200, { ...saved, embedding: null });
         } catch (error) {
           if (error && error.code === 'invalid_request') {
             sendJson(res, 400, { error: 'JSON inválido', code: 'invalid_request' });

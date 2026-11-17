@@ -21,3 +21,12 @@ create table if not exists question_bank (
   status text not null,
   created_at timestamptz not null default now()
 );
+
+alter table question_bank enable row level security;
+
+drop policy if exists question_bank_app on question_bank;
+
+-- Não há política para anon nem authenticated.
+-- A chave pública não lê nem grava esta tabela.
+-- O servidor grava com SUPABASE_SECRET_KEY, que não passa por estas regras
+-- e não deve ir para o navegador nem para o git.
