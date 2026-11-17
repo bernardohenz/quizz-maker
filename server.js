@@ -10,6 +10,13 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { buildFreePrompt, TEXT_MODEL } = require('./lib/free-question');
+const { parseQuizQuestion } = require('./lib/parse-question');
+const { difficultyTarget } = require('./lib/grades');
+const { getBankStore } = require('./lib/bank-store');
+const { retrieveFamily } = require('./lib/question-bank');
+const { adaptQuestion } = require('./lib/adapt-question');
+const { embeddingsConfigured, embedText } = require('./lib/embeddings');
 
 // Carregar .env primeiro
 const envPath = path.join(__dirname, '.env');
@@ -19,15 +26,17 @@ if (fs.existsSync(envPath)) {
     if (match) {
       const key = match[1].trim();
       const value = match[2].trim().replace(/^["']|["']$/g, '');
-      process.env[key] = value;
+      if (process.env[key] === undefined) {
+        process.env[key] = value;
+      }
     }
   });
 }
 
 let supabase = null;
 try {
-  const { createClient } = require('@supabase/supabase-js');
   if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+    const { createClient } = require('@supabase/supabase-js');
     supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
   }
 } catch (e) {
@@ -35,12 +44,18 @@ try {
 }
 
 const PORT = process.env.PORT || 3000;
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const USE_SUPABASE = !!supabase;
 
 function sendJson(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
+}
+
+function httpError(status, message, code) {
+  const error = new Error(message);
+  error.status = status;
+  if (code) error.code = code;
+  return error;
 }
 
 const MIME_TYPES = {
@@ -69,50 +84,23 @@ function serveStatic(req, res) {
   });
 }
 
-async function generateQuestion(config) {
-  const { serie, assunto, tematica, dificuldade, nota } = config;
-
-  const notaSection = nota
-    ? `\nINSTRUÇÃO DO PROFESSOR (OBRIGATÓRIO seguir): ${nota}\n`
-    : '';
-
-  const prompt = `Você é um professor criando questões de quiz para crianças. Gere UMA pergunta de múltipla escolha.
-
-CONTEXTO:
-- Série: ${serie}º ano do ensino fundamental
-- Assunto: ${assunto}
-- Temática para contextualizar as perguntas: ${tematica}
-- Nível de dificuldade: ${dificuldade}
-${notaSection}
-FORMATO OBRIGATÓRIO - responda APENAS com um JSON válido, sem texto adicional:
-{
-  "question": "Texto da pergunta (use a temática ${tematica} para tornar mais divertido)",
-  "options": ["alternativa A", "alternativa B", "alternativa C", "alternativa D", "alternativa E"],
-  "correctIndex": 0,
-  "explanation": "Explicação didática para a criança aprender (1-2 frases)"
-}
-
-REGRAS:
-- correctIndex é o índice da resposta correta (0 a 4)
-- Exatamente 5 alternativas
-- A pergunta deve ser adequada para ${serie}º ano
-- Use a temática ${tematica} de forma criativa
-- A explicação deve ajudar a criança a entender o conceito`;
-
+async function completeWithGroq(prompt) {
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GROQ_API_KEY}`,
+      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: TEXT_MODEL,
       messages: [
         { role: 'system', content: 'Você gera questões de quiz em JSON. Responda apenas com o JSON válido.' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.8,
       max_tokens: 1024,
+      reasoning_effort: 'low',
+      include_reasoning: false,
     }),
   });
 
@@ -123,180 +111,212 @@ REGRAS:
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content?.trim();
-  
+
   if (!content) {
     throw new Error('Resposta vazia da API');
   }
 
-  // Extrair JSON da resposta (a IA às vezes adiciona texto antes/depois)
-  let jsonStr = content;
-  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1].trim();
-  } else {
-    // Fallback: extrair o primeiro objeto JSON (entre { e })
-    const firstBrace = content.indexOf('{');
-    if (firstBrace !== -1) {
-      let depth = 0;
-      let end = firstBrace;
-      for (let i = firstBrace; i < content.length; i++) {
-        if (content[i] === '{') depth++;
-        if (content[i] === '}') {
-          depth--;
-          if (depth === 0) {
-            end = i + 1;
-            break;
-          }
-        }
-      }
-      jsonStr = content.slice(firstBrace, end);
-    }
-  }
-
-  let question;
-  try {
-    question = JSON.parse(jsonStr);
-  } catch (parseErr) {
-    console.error('Resposta da IA (trecho):', content.slice(0, 500));
-    throw new Error('A IA retornou um formato inválido. Tente gerar novamente.');
-  }
-
-  // Validação
-  if (!question.question || !Array.isArray(question.options) || question.options.length !== 5) {
-    throw new Error('Formato inválido da pergunta gerada');
-  }
-  if (typeof question.correctIndex !== 'number' || question.correctIndex < 0 || question.correctIndex > 4) {
-    question.correctIndex = 0;
-  }
-  if (!question.explanation) {
-    question.explanation = 'Boa resposta!';
-  }
-
-  return question;
+  return content;
 }
 
-const server = http.createServer(async (req, res) => {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+async function generateQuestion(config) {
+  return parseQuizQuestion(await completeWithGroq(buildFreePrompt(config)));
+}
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-    return;
+async function generateBankQuestion(config) {
+  const gradeIndex = Number(config.serie);
+  const target = difficultyTarget(config.dificuldade);
+  if (!Number.isInteger(gradeIndex) || gradeIndex < 1 || gradeIndex > 13 || target == null) {
+    throw httpError(400, 'Série ou dificuldade inválida', 'invalid_request');
   }
 
-  // GET /api/quizzes - lista de quizzes
-  if (req.method === 'GET' && req.url === '/api/quizzes') {
-    try {
-      if (USE_SUPABASE) {
-        const { data, error } = await supabase.from('quizzes').select('name, file, emoji, description').order('created_at', { ascending: false });
-        if (error) throw error;
-        sendJson(res, 200, { quizzes: data || [] });
-      } else {
-        const listPath = path.join(__dirname, 'quiz_jsons', 'list.json');
-        const list = fs.existsSync(listPath) ? JSON.parse(fs.readFileSync(listPath, 'utf8')) : { quizzes: [] };
-        sendJson(res, 200, list);
-      }
-    } catch (err) {
-      console.error('Erro ao listar quizzes:', err);
-      sendJson(res, 500, { error: err.message });
+  let items;
+  try {
+    items = await getBankStore().listAll();
+  } catch (error) {
+    if (error && error.code === 'bank_unavailable') {
+      error.status = 503;
+      throw error;
     }
-    return;
+    throw error;
   }
 
-  // GET /api/quiz/:file - conteúdo de um quiz
-  const quizMatch = req.url.match(/^\/api\/quiz\/([^/?#]+)$/);
-  if (req.method === 'GET' && quizMatch) {
-    const file = quizMatch[1];
+  const note = typeof config.nota === 'string' ? config.nota.trim() : '';
+  let noteEmbedding;
+  if (note !== '' && embeddingsConfigured()) {
     try {
-      if (USE_SUPABASE) {
-        const { data, error } = await supabase.from('quizzes').select('content').eq('file', file).single();
-        if (error || !data) throw new Error('Quiz não encontrado');
-        sendJson(res, 200, data.content);
-      } else {
-        const quizPath = path.join(__dirname, 'quiz_jsons', file);
-        if (!fs.existsSync(quizPath)) throw new Error('Quiz não encontrado');
-        const content = JSON.parse(fs.readFileSync(quizPath, 'utf8'));
-        sendJson(res, 200, content);
+      noteEmbedding = await embedText(note);
+    } catch (error) {
+      if (error && error.code === 'embedding_dimension') {
+        error.status = 500;
+        throw error;
       }
-    } catch (err) {
-      sendJson(res, 404, { error: err.message });
+      throw error;
     }
-    return;
   }
 
-  if (req.method === 'POST' && req.url === '/api/save-quiz') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { quiz, filename } = JSON.parse(body);
-        if (!quiz?.name || !Array.isArray(quiz?.questions)) {
-          throw new Error('Dados do quiz inválidos');
-        }
-        const slug = (filename || 'quiz').replace(/\.json$/, '').replace(/[^a-z0-9-_]/gi, '-').toLowerCase() || 'quiz';
-        const file = `${slug}.json`;
+  const retrieved = retrieveFamily(items, {
+    subject: config.assunto,
+    gradeIndex,
+    difficultyTarget: target,
+    note: config.nota,
+    excludeIds: config.excludeIds,
+    usedSkills: config.usedSkills,
+    embeddingsConfigured: embeddingsConfigured(),
+    noteEmbedding,
+  });
 
-        if (USE_SUPABASE) {
-          const { error } = await supabase.from('quizzes').upsert({
-            file,
-            name: quiz.name,
-            emoji: '📚',
-            description: `${quiz.questions.length} perguntas`,
-            content: quiz,
-          }, { onConflict: 'file' });
-          if (error) throw error;
-        } else {
-          const quizPath = path.join(__dirname, 'quiz_jsons', file);
-          const listPath = path.join(__dirname, 'quiz_jsons', 'list.json');
-          fs.writeFileSync(quizPath, JSON.stringify(quiz, null, 2), 'utf8');
-          let list = { quizzes: [] };
-          if (fs.existsSync(listPath)) list = JSON.parse(fs.readFileSync(listPath, 'utf8'));
-          if (!list.quizzes.find((q) => q.file === file)) {
-            list.quizzes.push({ name: quiz.name, file, emoji: '📚', description: `${quiz.questions.length} perguntas` });
-            fs.writeFileSync(listPath, JSON.stringify(list, null, 2), 'utf8');
-          }
-        }
-        sendJson(res, 200, { success: true, file });
-      } catch (err) {
-        console.error('Erro ao salvar quiz:', err);
-        sendJson(res, 500, { error: err.message || 'Erro ao salvar' });
-      }
-    });
-    return;
+  if (retrieved.empty) {
+    throw httpError(422, 'O banco não cobre esse pedido', 'bank_empty');
   }
 
-  if (req.method === 'POST' && req.url === '/api/generate-question') {
-    if (!GROQ_API_KEY) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'GROQ_API_KEY não configurada. Execute: GROQ_API_KEY=sua_chave node server.js' }));
+  const question = await adaptQuestion(retrieved.family, {
+    serie: gradeIndex,
+    assunto: config.assunto,
+    tematica: config.tematica,
+    dificuldade: config.dificuldade,
+    nota: config.nota,
+  }, completeWithGroq);
+
+  return {
+    ...question,
+    sourceIds: retrieved.sourceIds,
+    skill: retrieved.skill,
+    mode: 'bank',
+  };
+}
+
+function createQuizServer() {
+  return http.createServer(async (req, res) => {
+    // CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
       return;
     }
 
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
+    // GET /api/quizzes - lista de quizzes
+    if (req.method === 'GET' && req.url === '/api/quizzes') {
       try {
-        const config = JSON.parse(body);
-        const question = await generateQuestion(config);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(question));
+        if (USE_SUPABASE) {
+          const { data, error } = await supabase.from('quizzes').select('name, file, emoji, description').order('created_at', { ascending: false });
+          if (error) throw error;
+          sendJson(res, 200, { quizzes: data || [] });
+        } else {
+          const listPath = path.join(__dirname, 'quiz_jsons', 'list.json');
+          const list = fs.existsSync(listPath) ? JSON.parse(fs.readFileSync(listPath, 'utf8')) : { quizzes: [] };
+          sendJson(res, 200, list);
+        }
       } catch (err) {
-        console.error('Erro ao gerar pergunta:', err);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message || 'Erro ao gerar pergunta' }));
+        console.error('Erro ao listar quizzes:', err);
+        sendJson(res, 500, { error: err.message });
       }
-    });
-    return;
-  }
+      return;
+    }
 
-  serveStatic(req, res);
-});
+    // GET /api/quiz/:file - conteúdo de um quiz
+    const quizMatch = req.url.match(/^\/api\/quiz\/([^/?#]+)$/);
+    if (req.method === 'GET' && quizMatch) {
+      const file = quizMatch[1];
+      try {
+        if (USE_SUPABASE) {
+          const { data, error } = await supabase.from('quizzes').select('content').eq('file', file).single();
+          if (error || !data) throw new Error('Quiz não encontrado');
+          sendJson(res, 200, data.content);
+        } else {
+          const quizPath = path.join(__dirname, 'quiz_jsons', file);
+          if (!fs.existsSync(quizPath)) throw new Error('Quiz não encontrado');
+          const content = JSON.parse(fs.readFileSync(quizPath, 'utf8'));
+          sendJson(res, 200, content);
+        }
+      } catch (err) {
+        sendJson(res, 404, { error: err.message });
+      }
+      return;
+    }
 
-server.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
-  console.log(`Modo: ${USE_SUPABASE ? 'Supabase' : 'Arquivos locais'}`);
-  if (!GROQ_API_KEY) console.warn('AVISO: GROQ_API_KEY não configurada. A criação de quiz não funcionará.');
-});
+    if (req.method === 'POST' && req.url === '/api/save-quiz') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', async () => {
+        try {
+          const { quiz, filename } = JSON.parse(body);
+          if (!quiz?.name || !Array.isArray(quiz?.questions)) {
+            throw new Error('Dados do quiz inválidos');
+          }
+          const slug = (filename || 'quiz').replace(/\.json$/, '').replace(/[^a-z0-9-_]/gi, '-').toLowerCase() || 'quiz';
+          const file = `${slug}.json`;
+
+          if (USE_SUPABASE) {
+            const { error } = await supabase.from('quizzes').upsert({
+              file,
+              name: quiz.name,
+              emoji: '📚',
+              description: `${quiz.questions.length} perguntas`,
+              content: quiz,
+            }, { onConflict: 'file' });
+            if (error) throw error;
+          } else {
+            const quizPath = path.join(__dirname, 'quiz_jsons', file);
+            const listPath = path.join(__dirname, 'quiz_jsons', 'list.json');
+            fs.writeFileSync(quizPath, JSON.stringify(quiz, null, 2), 'utf8');
+            let list = { quizzes: [] };
+            if (fs.existsSync(listPath)) list = JSON.parse(fs.readFileSync(listPath, 'utf8'));
+            if (!list.quizzes.find((q) => q.file === file)) {
+              list.quizzes.push({ name: quiz.name, file, emoji: '📚', description: `${quiz.questions.length} perguntas` });
+              fs.writeFileSync(listPath, JSON.stringify(list, null, 2), 'utf8');
+            }
+          }
+          sendJson(res, 200, { success: true, file });
+        } catch (err) {
+          console.error('Erro ao salvar quiz:', err);
+          sendJson(res, 500, { error: err.message || 'Erro ao salvar' });
+        }
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/generate-question') {
+      if (!process.env.GROQ_API_KEY) {
+        sendJson(res, 500, { error: 'GROQ_API_KEY não configurada. Execute: GROQ_API_KEY=sua_chave node server.js' });
+        return;
+      }
+
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', async () => {
+        try {
+          const config = JSON.parse(body);
+          const question = config.mode === 'bank'
+            ? await generateBankQuestion(config)
+            : await generateQuestion(config);
+          sendJson(res, 200, question);
+        } catch (err) {
+          const status = err.status || 500;
+          if (!err.code) console.error('Erro ao gerar pergunta:', err);
+          const payload = { error: err.message || 'Erro ao gerar pergunta' };
+          if (err.code) payload.code = err.code;
+          sendJson(res, status, payload);
+        }
+      });
+      return;
+    }
+
+    serveStatic(req, res);
+  });
+}
+
+if (require.main === module) {
+  const server = createQuizServer();
+  server.listen(PORT, () => {
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(`Modo: ${USE_SUPABASE ? 'Supabase' : 'Arquivos locais'}`);
+    if (!process.env.GROQ_API_KEY) console.warn('AVISO: GROQ_API_KEY não configurada. A criação de quiz não funcionará.');
+  });
+}
+
+module.exports = { createQuizServer };
