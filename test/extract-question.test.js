@@ -8,6 +8,13 @@ test('prompt pede transcrição fiel', () => {
   assert.match(prompt, /não crie alternativa/i);
 });
 
+test('enunciado ausente falha na leitura', () => {
+  assert.throws(
+    () => parseExtraction(JSON.stringify({ transcription: { options: ['3', '4'] } })),
+    (error) => error.message === 'Não foi possível ler a questão na foto.',
+  );
+});
+
 test('gabarito ausente continua nulo', () => {
   const parsed = parseExtraction(JSON.stringify({
     transcription: { stem: 'Quanto é 2 + 2?', options: ['3', '4', '5', '6'] },
