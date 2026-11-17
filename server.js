@@ -84,7 +84,7 @@ function serveStatic(req, res) {
   });
 }
 
-async function completeWithGroq(prompt) {
+async function completeWithGroq(prompt, temperature) {
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -97,7 +97,7 @@ async function completeWithGroq(prompt) {
         { role: 'system', content: 'Você gera questões de quiz em JSON. Responda apenas com o JSON válido.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.8,
+      temperature,
       max_tokens: 1024,
       reasoning_effort: 'low',
       include_reasoning: false,
@@ -120,7 +120,7 @@ async function completeWithGroq(prompt) {
 }
 
 async function generateQuestion(config) {
-  return parseQuizQuestion(await completeWithGroq(buildFreePrompt(config)));
+  return parseQuizQuestion(await completeWithGroq(buildFreePrompt(config), 0.8));
 }
 
 async function generateBankQuestion(config) {
@@ -176,7 +176,7 @@ async function generateBankQuestion(config) {
     tematica: config.tematica,
     dificuldade: config.dificuldade,
     nota: config.nota,
-  }, completeWithGroq);
+  }, (prompt) => completeWithGroq(prompt, 0.4));
 
   return {
     ...question,

@@ -136,6 +136,28 @@ test('banco devolve habilidade e ids da família', async () => {
     assert.equal(body.skill, item.skill);
     assert.ok(body.sourceIds.includes(item.id));
     assert.match(lastPrompt(), /multiplicar dois digitos/);
+    const request = JSON.parse(groqBodies[groqBodies.length - 1]);
+    assert.equal(request.model, 'openai/gpt-oss-120b');
+    assert.equal(request.temperature, 0.4);
+    assert.equal(request.max_tokens, 1024);
+    assert.equal(request.reasoning_effort, 'low');
+    assert.equal(request.include_reasoning, false);
+  });
+});
+
+test('série inválida no banco responde invalid_request sem chamar o Groq', async () => {
+  const callsBefore = groqBodies.length;
+  await withServer(async (base) => {
+    const { status, body } = await postJson(base, '/api/generate-question', {
+      mode: 'bank',
+      serie: 99,
+      assunto: 'Matemática',
+      tematica: 'futebol',
+      dificuldade: 'médio',
+    });
+    assert.equal(status, 400);
+    assert.equal(body.code, 'invalid_request');
+    assert.equal(groqBodies.length, callsBefore);
   });
 });
 
