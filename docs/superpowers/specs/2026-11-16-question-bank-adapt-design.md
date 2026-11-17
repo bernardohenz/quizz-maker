@@ -6,6 +6,8 @@ A criação de quiz ganha um segundo modo. Nesse modo, o servidor busca no banco
 
 O modo atual, gerar a questão do zero, continua disponível e é o padrão.
 
+O mesmo trabalho inclui a página em que uma questão pública, ou uma questão transcrita por você, entra no banco. A entrada é por texto ou por foto.
+
 ## Contexto
 
 Hoje `POST /api/generate-question` manda série, assunto, temática, dificuldade e uma nota opcional ao Groq. A resposta é um JSON com `question`, `options` (5), `correctIndex` e `explanation`. O professor aceita ou recusa, ajusta a dificuldade da próxima e salva o quiz. O jogador, em `app.js`, lê só esses quatro campos.
@@ -33,14 +35,11 @@ Cada item traz a procedência:
 | `origin` | `public` ou `manual` |
 | `source_label` | Texto curto da fonte: endereço da questão pública ou uma descrição da que você inseriu |
 
-A busca ignora item sem um desses valores. Gerar do zero, adaptar e salvar o quiz não escrevem em `question_bank`. A questão aceita no quiz permanece só no JSON do quiz.
-
-A página para incluir questões fica para um spec seguinte. Ela poderá receber o texto digitado ou uma foto. Com a foto, um modelo visual extrai enunciado, alternativas e resposta da imagem, e pode propor habilidade, faixa de série, dificuldade, política de tema, limites e tipos de erro. O enunciado, as alternativas e a resposta gravados são os da questão fotografada ou digitada. O item entra como `draft` e só vira `usable` depois da sua confirmação. Essa página também não inventa questão para encher o banco.
+A busca ignora item sem um desses valores. Gerar do zero, adaptar e salvar o quiz não escrevem em `question_bank`. A questão aceita no quiz permanece só no JSON do quiz. Quem escreve no banco é a página de inclusão, e só com o que você envia depois de revisar.
 
 ## Fora de escopo
 
-- Construir agora a página de inclusão, com digitação ou foto.
-- Como os embeddings dos itens são calculados e gravados. Este spec só embute a nota do professor na hora da busca.
+- Como os embeddings dos itens são calculados e gravados. A inclusão grava `embedding` nulo. Este spec só embute a nota do professor na hora da busca.
 - Códigos da BNCC, índice ANN e um banco vetorial separado.
 - Mudar o fluxo de jogar, aceitar, recusar ou salvar.
 
@@ -58,7 +57,7 @@ Cada questão do banco tem:
 | `skill_tags` | Lista curta, só para leitura e depuração. Não completa família |
 | `theme_policy` | `reskin` ou `wording` |
 | `stem` | Enunciado neutro |
-| `options` | Cinco alternativas |
+| `options` | Quatro ou cinco alternativas, como na questão de origem |
 | `correct_index` | Índice da correta, de 0 a 4 |
 | `explanation` | O conceito, em linguagem neutra |
 | `invariant.preserve` | Lista de frases que a reescrita tem de obedecer, inclusive limites numéricos |
@@ -67,6 +66,8 @@ Cada questão do banco tem:
 | `origin` | `public` ou `manual` |
 | `source_label` | Procedência, texto não vazio |
 | `status` | `draft` ou `usable`. A busca só lê `usable` |
+
+No rascunho, alternativas e gabarito podem estar incompletos. Item utilizável tem quatro ou cinco alternativas e um `correct_index` válido.
 
 Índice de série:
 
@@ -117,6 +118,7 @@ A instrução pede uma questão nova que:
 - siga a `theme_policy` da família (`reskin` troca o cenário; `wording` conserva o fato e não o substitui pelo tema);
 - tenha exatamente cinco alternativas e uma correta;
 - faça as erradas expressarem os tipos de erro listados, em qualquer ordem;
+- quando a família tiver quatro alternativas, crie a quinta como mais um distrator de um tipo de erro já listado;
 - use redação adequada à série.
 
 A saída do modelo é o mesmo JSON de hoje. O servidor acrescenta `sourceIds` (os ids da família), `skill` (a habilidade da âncora) e `mode: "bank"`. Esses três campos não vêm do modelo.
@@ -188,13 +190,97 @@ O cliente guarda os `sourceIds` já mostrados e as `skill` aceitas e os reenvia.
 
 Para `bank_empty` e `bank_unavailable`, a área da pergunta mostra a mensagem e um botão "Gerar esta do zero". Esse botão chama a rota com `mode: "free"` uma vez, com a mesma série, assunto, temática, dificuldade e nota, e não muda o modo da sessão.
 
+## Página de inclusão
+
+A página é `incluir.html`, com `incluir.js`, reusando `styles.css` e `criar.css`. A configuração de `criar.html` aponta para ela com o link "Incluir questão no banco". Não há login novo: o acesso é o mesmo do restante do servidor.
+
+A foto não fica gravada. O banco recebe o texto que você confirma.
+
+### Formulário
+
+O topo pede a procedência, `public` ou `manual`, e o `source_label`. Os dois são obrigatórios.
+
+Em seguida há dois jeitos de preencher a questão. Digitar o enunciado e as alternativas, ou escolher uma foto e usar "Ler foto". A foto aceita é JPEG, PNG ou WebP, até 8 MB, uma por vez. "Ler foto" chama a extração e preenche o formulário. Essa chamada não grava nada.
+
+O restante do formulário, editável nos dois caminhos:
+
+- assunto, na mesma lista do item
+- série mínima e série máxima, índices 1 a 13, com os rótulos da tabela
+- dificuldade, de 1 a 10
+- habilidade e etiquetas
+- política de tema, com os rótulos "Pode trocar o cenário" (`reskin`) e "Manter o fato" (`wording`)
+- enunciado
+- alternativas, com a correta marcada. Dá para acrescentar e tirar. O rascunho pode ter menos de quatro. O item utilizável exige quatro ou cinco
+- explicação
+- uma frase de limite por linha, gravada em `invariant.preserve`
+- o tipo de erro de cada alternativa errada
+
+"Guardar rascunho" grava `status: "draft"`. Para isso bastam procedência, `source_label` e enunciado. "Incluir no banco" grava `status: "usable"` e só segue quando o item passa na validação completa. O botão fica desabilitado enquanto faltar campo.
+
+A validação de um item utilizável exige procedência válida, `source_label` não vazio, assunto da lista, faixas de série com mínimo menor ou igual ao máximo, dificuldade de 1 a 10, habilidade, `theme_policy`, enunciado, quatro ou cinco alternativas preenchidas, `correct_index` válido, explicação, ao menos uma frase em `preserve` e um tipo de erro para cada alternativa errada.
+
+Abaixo do formulário, a lista troca entre "Rascunhos" e "No banco". Os dois abrem o item no mesmo formulário. Dá para atualizar e dá para excluir. A lista vem sem o campo `embedding`, a mais recente primeiro.
+
+Digitar a questão não chama modelo nenhum. As sugestões da foto aparecem no formulário para você corrigir. O que é gravado é o conteúdo do formulário no momento do envio.
+
+### Extração da foto
+
+`POST /api/extract-question` recebe `{ "imageDataUrl": "data:image/jpeg;base64,..." }`. O servidor recusa outro tipo ou arquivo acima de 8 MB com 400 e `code: "invalid_image"`.
+
+A chamada usa a mesma chave e o mesmo endpoint de chat do Groq. O modelo padrão é `qwen/qwen3.8-27b`, trocável por `GROQ_VISION_MODEL`. A mensagem leva o texto e a imagem em `image_url`. A temperatura é 0,1 e a resposta pede JSON.
+
+O prompt manda transcrever enunciado e alternativas como estão impressos. Não reescreve, não traduz, não simplifica e não cria alternativa. `correct_index` só vem preenchido quando a imagem mostra o gabarito. A explicação só vem quando a imagem mostra a resolução. Habilidade, série, dificuldade, política de tema, limites e tipos de erro voltam à parte, como sugestão.
+
+A resposta separa as duas coisas:
+
+```json
+{
+  "transcription": {
+    "stem": "Uma pessoa tem 3 pacotes. Cada pacote tem 5 itens. Quantos itens há no total?",
+    "options": ["8", "12", "15", "18"],
+    "correct_index": null,
+    "explanation": ""
+  },
+  "suggestions": {
+    "subject": "Matemática",
+    "grade_min": 4,
+    "grade_max": 5,
+    "difficulty": 4,
+    "skill": "Multiplicar dois números de um dígito",
+    "skill_tags": ["multiplicação"],
+    "theme_policy": "reskin",
+    "preserve": ["Os dois fatores continuam de um dígito e o produto é o total."],
+    "distractors": [
+      { "index": 0, "error": "soma em vez de produto" }
+    ]
+  }
+}
+```
+
+JSON inválido depois de duas tentativas, ou transcrição sem enunciado, responde 422 e `code: "extract_failed"`. O formulário permanece como estava.
+
+### Rotas que gravam
+
+Estas são as únicas rotas que escrevem em `question_bank`. O servidor gera o `id` com UUID. `embedding` sai nulo.
+
+| Rota | Efeito |
+| --- | --- |
+| `GET /api/question-bank?status=draft` ou `status=usable` | Lista os itens daquele status, sem `embedding`. Sem `status`, responde 400 |
+| `POST /api/question-bank` | Cria o item. Corpo sem `id`. `status` é `draft` ou `usable` |
+| `PUT /api/question-bank/:id` | Substitui o item existente. O `id` da URL prevalece |
+| `DELETE /api/question-bank/:id` | Remove o item |
+
+Item utilizável inválido responde 400 e `code: "invalid_item"`. Rascunho sem procedência, sem `source_label` ou sem enunciado também. `id` desconhecido no `PUT` e no `DELETE` responde 404.
+
+No arquivo local, a escrita lê `question_bank/items.json`, inclui ou substitui pelo `id` e grava de novo. Ausência do arquivo na primeira inclusão cria o array. No Supabase, a mesma operação é um upsert na tabela `question_bank`.
+
 ## Armazenamento
 
-A leitura tem uma interface só.
+A leitura e a escrita usam a mesma fonte.
 
 Com `SUPABASE_URL` e `SUPABASE_KEY`, a tabela `question_bank` no Postgres já usado pelo projeto, com a extensão pgvector. Colunas iguais aos campos do item. `invariant` e `distractors` são `jsonb`. `embedding` é `vector(1536)`, nulo permitido. A ordenação por cosseno é exata dentro do conjunto filtrado.
 
-Sem Supabase, a fonte é `question_bank/items.json`, um array de itens. Ausência do arquivo é `bank_unavailable`. Array vazio, ou nenhum item aceito pela busca, é `bank_empty`.
+Sem Supabase, a fonte é `question_bank/items.json`, um array de itens. Na busca, a ausência do arquivo é `bank_unavailable`. A primeira inclusão cria o arquivo. Array vazio, ou nenhum item aceito pela busca, é `bank_empty`.
 
 Embeddings da nota usam um endpoint compatível com a API de embeddings da OpenAI:
 
@@ -210,10 +296,12 @@ A tabela não é exposta ao navegador. O servidor usa a mesma chave Supabase de 
 
 - `lib/grades.js` — índice, rótulo, estágio e alvo de dificuldade
 - `lib/parse-question.js` — extração e validação estrutural do JSON
-- `lib/question-bank.js` — `retrieveFamily` e a leitura Supabase ou arquivo
+- `lib/question-bank.js` — `retrieveFamily`, validação, lista, criação, atualização, exclusão e a leitura ou escrita no Supabase ou no arquivo
 - `lib/adapt-question.js` — montagem do prompt e chamada ao Groq
-- `server.js` — escolhe o ramo pelo `mode` e mantém `generateQuestion` para o modo livre
-- `criar.html` e `criar.js` — modo, séries e o estado da sessão
+- `lib/extract-question.js` — leitura da foto pelo modelo visual e separação entre transcrição e sugestão
+- `server.js` — escolhe o ramo pelo `mode`, mantém `generateQuestion` para o modo livre e expõe as rotas do banco
+- `criar.html` e `criar.js` — modo, séries, estado da sessão e o link para a inclusão
+- `incluir.html` e `incluir.js` — formulário, foto, rascunho e confirmação
 
 ## Testes
 
@@ -228,14 +316,19 @@ A busca é testada com itens fixos e um `rng` determinístico:
 - com nota e embeddings, a habilidade mais próxima da nota fica à frente de outra do mesmo filtro;
 - sem configuração de embedding, a nota não reordena os candidatos.
 
-O construtor do prompt é testado com uma família fixa: o texto contém a habilidade, as frases de `preserve`, a `theme_policy` e a temática, e pede uma questão nova.
+O construtor do prompt é testado com uma família fixa: o texto contém a habilidade, as frases de `preserve`, a `theme_policy` e a temática, e pede uma questão nova. Com uma família de quatro alternativas, o texto pede a quinta como distrator de um tipo já listado.
+
+O construtor do prompt da foto pede transcrição fiel e proíbe criar alternativa. O interpretador mantém `correct_index` nulo quando a resposta não traz gabarito.
 
 A rota, com Groq e embeddings substituídos:
 
 - `mode` livre devolve o JSON antigo, sem `sourceIds`;
 - `mode` banco devolve `sourceIds`, `skill` e `mode`;
 - banco sem candidatos devolve 422 e `bank_empty`;
-- gerar, adaptar e salvar o quiz não escrevem em `question_bank`.
+- gerar, adaptar e salvar o quiz não escrevem em `question_bank`;
+- `POST /api/extract-question` não escreve no banco;
+- `POST /api/question-bank` com item válido grava `usable`, e com campos obrigatórios faltando responde 400;
+- um rascunho exige procedência, `source_label` e enunciado, e pode seguir sem gabarito.
 
 ## Critérios de aceite
 
@@ -245,4 +338,5 @@ A rota, com Groq e embeddings substituídos:
 - Aceitar várias questões espalha as habilidades: as já aceitas pesam menos na próxima âncora.
 - Sem candidatos, a tela oferece gerar só aquela do zero e a sessão continua no modo banco.
 - Um quiz salvo com os campos extras abre e joga em `index.html`.
-- Nenhuma rota deste trabalho insere questão no banco. Questão gerada ou adaptada permanece só no quiz.
+- Gerar, adaptar e salvar o quiz não inserem questão no banco. Questão gerada ou adaptada permanece só no quiz.
+- Na página de inclusão, uma foto preenche o formulário e só entra no banco depois de "Incluir no banco". O enunciado gravado é o que ficou no formulário.
