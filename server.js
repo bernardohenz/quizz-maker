@@ -173,7 +173,8 @@ async function completeExtract(prompt, imageDataUrl) {
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Groq API error ${response.status}: ${errText}`);
+    console.error('Falha ao ler a foto.', response.status, errText);
+    throw new Error('Falha ao ler a foto.');
   }
 
   const data = await response.json();
